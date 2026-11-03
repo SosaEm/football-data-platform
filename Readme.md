@@ -1,107 +1,103 @@
 # Football Data Platform
 
-A lightweight Python ingestion project that pulls football match and standings data from the football-data.org API and stores the raw JSON payloads in a local filesystem structure for later analysis.
+A Python data pipeline that ingests football match and standings data from the [football-data.org](https://www.football-data.org/) API, stores raw records in PostgreSQL, and uses dbt to build analytics models.
 
-## Overview
+## Data pipeline
 
-This project currently focuses on collecting data for three competitions:
+The project currently collects Premier League (`PL`), La Liga (`PD`), and Serie A (`SA`) data:
 
-- Premier League (`PL`)
-- La Liga (`PD`)
-- Serie A (`SA`)
-
-For each competition, it fetches:
-
-- matches
-- standings
-
-The ingestion job stores raw responses under `data/raw/<competition>/<endpoint>/<date>/` so the project can be extended later with transformations, warehousing, analytics, or dashboards.
-
-## Project Structure
-
-```text
-.
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── .env
-├── data/
-│   └── raw/
-│       ├── PL/
-│       │   ├── matches/
-│       │   └── standings/
-│       ├── PD/
-│       │   ├── matches/
-│       │   └── standings/
-│       └── SA/
-│           ├── matches/
-│           └── standings/
-├── src/
-│   ├── __init__.py
-│   └── ingest/
-│       ├── __init__.py
-│       ├── client.py
-│       └── ingest_matches.py
-└── tests/
-```
+1. **Ingest** match and standings responses from football-data.org. Requests are throttled and transient HTTP failures are retried. Raw JSON responses are saved under `data/raw/<competition>/<endpoint>/<date>/`.
+2. **Load** the raw files into PostgreSQL's `raw` schema. Match records and dated standings snapshots are upserted, so the loader can be run again safely.
+3. **Transform** the raw tables with dbt. Staging models expose match and standings fields; the league-table mart calculates standings from finished regular-season matches.
+4. **Test** model constraints and finished-match scores, and compare the calculated league table with the latest API standings snapshot.
 
 ## Requirements
 
 - Python 3.12+
 - A football-data.org API token
-- Docker and Docker Compose (optional, for containerized runs)
+- Docker and Docker Compose
 
 ## Setup
 
-1. Clone the repository.
-2. Create a `.env` file in the project root.
-3. Add your API token using the environment variable expected by the client:
+Create a local `.env` file from the example and add your API token and PostgreSQL settings:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 FOOTBALL_DATA_TOKEN=your_token_here
+POSTGRES_USER=football
+POSTGRES_PASSWORD=your_password
+POSTGRES_DB=football
 ```
 
-## Local Run
+Keep `.env` private; it contains credentials.
 
-Install dependencies:
+## Run the pipeline with Docker Compose
+
+Start PostgreSQL and wait for its health check:
+
+```bash
+docker compose up -d postgres
+```
+
+Run the steps in order so the raw files exist before loading and the tables exist before dbt runs:
+
+```bash
+docker compose run --build --rm ingest
+docker compose run --build --rm load
+docker compose run --build --rm dbt
+```
+
+The ingestion service writes files to `data/raw/`. The loader creates the `raw.matches` and `raw.standings` tables and loads those files. dbt builds staging views in the `analytics` schema and the `mart_league_table` table. `dbt build` runs the configured model tests as well as the models.
+
+Stop PostgreSQL when finished:
+
+```bash
+docker compose down
+```
+
+To remove the persisted PostgreSQL data volume as well, use `docker compose down -v`.
+
+## Run ingestion locally
+
+You can run just the API ingestion step without Docker:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Linux/macOS
 # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
-```
-
-Run the ingestion job:
-
-```bash
 python -m src.ingest.ingest_matches
 ```
 
-## Docker Run
+The local run needs `FOOTBALL_DATA_TOKEN` set in the environment (or loaded from `.env` by your shell or IDE). To load into PostgreSQL or run dbt, use the Docker Compose steps above.
 
-Build and start the ingestion service:
+## Project structure
 
-```bash
-docker-compose up --build ingest
+```text
+.
+├── .env.example
+├── docker-compose.yml
+├── Dockerfile
+├── data/                       # Local raw JSON files (not committed)
+├── dbt/
+│   ├── models/
+│   │   ├── staging/            # Staging views and source definitions
+│   │   └── marts/              # Analytics tables
+│   ├── tests/                  # Singular dbt data tests
+│   └── profiles.yml
+└── src/
+    ├─�� ingest/                 # API client and ingestion job
+    └── load/                   # PostgreSQL raw-data loader
 ```
-
-The application will read the token from `.env` and write raw payloads into `data/raw`.
-
-## Behavior
-
-The ingestion client:
-
-- uses the `football-data.org` base URL
-- throttles requests to avoid exceeding free-tier rate limits
-- retries transient HTTP failures such as `429` and `5xx` responses
-- writes each payload atomically to a timestamped JSON file
 
 ## Notes
 
-- The project currently stores raw data only; no database or transformation layer is configured yet.
-- The free tier of the football-data.org API has request limits, so the client includes a small delay between calls.
-- The competition list is defined in `src/ingest/ingest_matches.py` and can be extended if additional leagues are needed.
+- The API's free tier has request limits; ingestion includes a delay between calls.
+- The league-table mart includes finished matches in the `REGULAR_SEASON` stage and ranks teams by points, goal difference, then goals scored.
+- The API-versus-mart standings comparison is configured as a warning because snapshots or results may not always match exactly.
 
 ## License
 
