@@ -10,7 +10,7 @@ select
     (payload -> 'awayTeam' ->> 'id')::bigint        as away_team_id,
     payload -> 'awayTeam' ->> 'name'                as away_team,
     payload -> 'score' ->> 'winner'                 as winner,
-    (payload -> 'score' -> 'fullTime' ->> 'home')::int as hg,
+    (payload -> 'score' -> 'fullTime' ->> 'home')::int as home_goals,
     (payload -> 'score' -> 'fullTime' ->> 'away')::int as away_goals,
     loaded_at
 from {{ source('raw', 'matches') }}
