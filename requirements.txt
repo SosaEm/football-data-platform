@@ -1,4 +1,2 @@
 requests
 psycopg2-binary
-dbt-core
-dbt-postgres
