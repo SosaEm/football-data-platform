@@ -35,7 +35,7 @@ Python · PostgreSQL · dbt · Docker Compose
   league table against the API's own standings.
 
 ## Limitations
-- Free API tier: current season only [confirm], limited competitions.
+- Free API tier: current season only, limited competitions.
 - Tie-breaker rules are simplified (no head-to-head).
 
 ## Data source
