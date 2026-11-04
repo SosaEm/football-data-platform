@@ -73,3 +73,5 @@ raw layer and runs `dbt build`.
   other by service name).
 
 Limitation: CI does not exercise the live API ingestion or the Airflow DAG.
+
+![CI](https://github.com/SosaEm/football-data-platform/actions/workflows/ci.yml/badge.svg)
