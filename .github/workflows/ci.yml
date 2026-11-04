@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  dbt-tests:
+    runs-on: ubuntu-latest
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: football
+      POSTGRES_USER: football
+      POSTGRES_PASSWORD: football   # throwaway DB that only exists during this run
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: football
+          POSTGRES_USER: football
+          POSTGRES_PASSWORD: football
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U football -d football"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r dbt/requirements.txt
+
+      - name: Load fixtures into raw layer
+        run: |
+          mkdir -p data
+          cp -r tests/fixtures/raw data/raw
+          python -m src.load.load_raw
+
+      - name: dbt build
+        working-directory: dbt
+        run: dbt build --profiles-dir .
