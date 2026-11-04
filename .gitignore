@@ -7,3 +7,4 @@ dbt/logs/
 dbt/dbt_packages/
 airflow/logs/
 .vscode/
+airflow/config/
