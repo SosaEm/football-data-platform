@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: mart_league_table
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+  - name: mart_team_rankings
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+  - name: mart_luck_index
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+  - name: mart_form_trend
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null

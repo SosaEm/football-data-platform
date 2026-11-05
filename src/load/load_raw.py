@@ -30,6 +30,16 @@ CREATE TABLE IF NOT EXISTS raw.standings (
     loaded_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (competition_code, snapshot_date)
 );
+CREATE TABLE IF NOT EXISTS raw.scorers (
+    competition_code TEXT NOT NULL,
+    snapshot_date    DATE NOT NULL,
+    player_id        BIGINT NOT NULL,
+    payload          JSONB NOT NULL,
+    source_file      TEXT NOT NULL,
+    loaded_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (competition_code, snapshot_date, player_id)
+);
+
 """
 
 
@@ -77,8 +87,25 @@ def load_standings(cur, path, code):
     )
     return 1
 
+def load_scorers(cur, path, code):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    snapshot_date = path.parent.name  # folder is named YYYY-MM-DD
+    scorers = data.get("scorers", [])
+    for s in scorers:
+        cur.execute(
+            """
+            INSERT INTO raw.scorers (competition_code, snapshot_date, player_id, payload, source_file)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (competition_code, snapshot_date, player_id) DO UPDATE
+               SET payload = EXCLUDED.payload,
+                   source_file = EXCLUDED.source_file,
+                   loaded_at = now()
+            """,
+            (code, snapshot_date, s["player"]["id"], Json(s), str(path)),
+        )
+    return len(scorers)
 
-LOADERS = {"matches": load_matches, "standings": load_standings}
+LOADERS = {"matches": load_matches, "standings": load_standings, "scorers": load_scorers}
 
 
 def main():
